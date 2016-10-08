@@ -8,6 +8,6 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("bin/debug/smackbrosclient2.vshost.exe")]
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("sharpdx.wpf/sharpdx.wpf.csproj")]
 
 

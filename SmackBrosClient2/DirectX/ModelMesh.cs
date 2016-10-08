@@ -11,7 +11,7 @@ using SharpDX.D3DCompiler;
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
 
-namespace LoadMesh
+namespace SmackBrosClient2.DirectX
 {
     class ModelMesh
     {

@@ -8,24 +8,23 @@ using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
-using LoadMesh;
 
 using Color = SharpDX.Color;
 using Device = SharpDX.Direct3D11.Device;
 using Buffer = SharpDX.Direct3D11.Buffer;
 
-namespace AssimpWrapper
+namespace SmackBrosClient2.DirectX
 {
     class ModelLoader
     {
         Device m_device;
-        AssimpImporter m_importer;
+        AssimpContext m_importer;
         String m_modelPath;
 
         public ModelLoader(  Device device )
         {
             m_device = device;
-            m_importer = new AssimpImporter();
+            m_importer = new AssimpContext();
             m_importer.SetConfig(new NormalSmoothingAngleConfig(66.0f));
         }
 
@@ -49,8 +48,8 @@ namespace AssimpWrapper
         //calculates the bounding box of the whole model
         private void ComputeBoundingBox(Model model, Scene scene)
         {
-            Vector3 sceneMin = new Vector3(1e10f, 1e10f, 1e10f);
-            Vector3 sceneMax = new Vector3(-1e10f, -1e10f, -1e10f);
+            SharpDX.Vector3 sceneMin = new SharpDX.Vector3(1e10f, 1e10f, 1e10f);
+            SharpDX.Vector3 sceneMax = new SharpDX.Vector3(-1e10f, -1e10f, -1e10f);
             Matrix transform = Matrix.Identity;
 
             ComputeBoundingBox(scene, scene.RootNode, ref sceneMin, ref sceneMax, ref transform);
@@ -60,7 +59,7 @@ namespace AssimpWrapper
         }
 
         //recursively calculates the bounding box of the whole model
-        private void ComputeBoundingBox(Scene scene, Node node, ref Vector3 min, ref Vector3 max, ref Matrix transform)
+        private void ComputeBoundingBox(Scene scene, Node node, ref SharpDX.Vector3 min, ref SharpDX.Vector3 max, ref Matrix transform)
         {
             Matrix previousTransform = transform;
             transform = Matrix.Multiply(previousTransform, FromMatrix(node.Transform));
@@ -72,9 +71,9 @@ namespace AssimpWrapper
                     Assimp.Mesh mesh = scene.Meshes[index];
                     for (int i = 0; i < mesh.VertexCount; i++)
                     {
-                        Vector3 tmp = FromVector(mesh.Vertices[i]);
+                        SharpDX.Vector3 tmp = FromVector(mesh.Vertices[i]);
                         Vector4 result;
-                        Vector3.Transform(ref tmp, ref transform, out result);
+                        SharpDX.Vector3.Transform(ref tmp, ref transform, out result);
 
                         min.X = Math.Min(min.X, result.X);
                         min.Y = Math.Min(min.Y, result.Y);
@@ -149,9 +148,10 @@ namespace AssimpWrapper
 
                     //if mesh has a material extract the diffuse texture, if present
                     Material material = scene.Materials[mesh.MaterialIndex];
-                    if (material != null && material.GetTextureCount(TextureType.Diffuse) > 0)
+                    if (material != null && material.GetMaterialTextureCount(TextureType.Diffuse) > 0)
                     {
-                        TextureSlot texture = material.GetTexture(TextureType.Diffuse, 0);
+                        TextureSlot texture;
+                        material.GetMaterialTexture((TextureType.Diffuse, 0, out texture);
                         //create new texture for mesh
                         modelMesh.AddTextureDiffuse(device, m_modelPath + "\\" + texture.FilePath);
                     }
@@ -167,7 +167,7 @@ namespace AssimpWrapper
                     InputElement[] vertexElements = new InputElement[ GetNoofInputElements(mesh) ];                    
                     uint elementIndex = 0;
                     vertexElements[elementIndex++] = new InputElement("POSITION", 0, Format.R32G32B32_Float, 0, 0);
-                    short vertexSize = (short)Utilities.SizeOf<Vector3>();
+                    short vertexSize = (short)Utilities.SizeOf<SharpDX.Vector3>();
 
                     if (hasColors)
                     {
@@ -177,22 +177,22 @@ namespace AssimpWrapper
                     if (hasNormals)
                     {
                         vertexElements[elementIndex++] = new InputElement("NORMAL", 0, Format.R32G32B32_Float, vertexSize, 0);
-                        vertexSize += (short)Utilities.SizeOf<Vector3>();
+                        vertexSize += (short)Utilities.SizeOf<SharpDX.Vector3>();
                     }
                     if (hasTangents)
                     {
                         vertexElements[elementIndex++] = new InputElement("TANGENT", 0, Format.R32G32B32_Float, vertexSize, 0);
-                        vertexSize += (short)Utilities.SizeOf<Vector3>();
+                        vertexSize += (short)Utilities.SizeOf<SharpDX.Vector3>();
                     }
                     if (hasBitangents)
                     {
                         vertexElements[elementIndex++] = new InputElement("BITANGENT", 0, Format.R32G32B32_Float, vertexSize, 0);
-                        vertexSize += (short)Utilities.SizeOf<Vector3>();
+                        vertexSize += (short)Utilities.SizeOf<SharpDX.Vector3>();
                     }
                     if (hasTexCoords)
                     {
                         vertexElements[elementIndex++] = new InputElement("TEXCOORD", 0, Format.R32G32_Float, vertexSize, 0);
-                        vertexSize += (short)Utilities.SizeOf<Vector2>();
+                        vertexSize += (short)Utilities.SizeOf<SharpDX.Vector2>();
                     }
                    
                     //set the vertex elements and size
@@ -200,12 +200,12 @@ namespace AssimpWrapper
                     modelMesh.VertexSize = vertexSize;
 
                     //get pointers to vertex data
-                    Vector3D[] positions = mesh.Vertices;
-                    Vector3D[] texCoords = mesh.GetTextureCoords(0);
-                    Vector3D[] normals = mesh.Normals;
-                    Vector3D[] tangents = mesh.Tangents;
-                    Vector3D[] biTangents = mesh.BiTangents;
-                    Color4D[] colours = mesh.GetVertexColors(0);
+                    Vector3D[] positions = mesh.Vertices.ToArray();
+                    Vector3D[] texCoords = mesh.TextureCoordinateChannels[0].ToArray();
+                    Vector3D[] normals = mesh.Normals.ToArray(); 
+                    Vector3D[] tangents = mesh.Tangents.ToArray(); 
+                    Vector3D[] biTangents = mesh.BiTangents.ToArray(); 
+                    Color4D[] colours = mesh.VertexColorChannels[0].ToArray();
 
                     //also determine primitive type
                     switch (mesh.PrimitiveType)
@@ -231,40 +231,40 @@ namespace AssimpWrapper
                         //add position, after transforming it with accumulated node transform
                         {
                             Vector4 result;
-                            Vector3 pos = FromVector(positions[i]);                           
-                            Vector3.Transform(ref pos, ref transform, out result);
-                            vertexStream.Write<Vector3>(new Vector3(result.X, result.Y, result.Z));
+                            SharpDX.Vector3 pos = FromVector(positions[i]);                           
+                            SharpDX.Vector3.Transform(ref pos, ref transform, out result);
+                            vertexStream.Write<SharpDX.Vector3>(new SharpDX.Vector3(result.X, result.Y, result.Z));
                         }
 
                         if (hasColors)
                         {
-                            Color vertColor = FromColor(mesh.GetVertexColors(0)[i]);
+                            Color vertColor = FromColor(mesh.VertexColorChannels[0][i]);
                             vertexStream.Write<Color>(vertColor);
                         }
                         if (hasNormals)
                         {
                             Vector4 result;
-                            Vector3 normal = FromVector(normals[i]);
-                            Vector3.Transform(ref normal, ref invTranspose, out result);
-                            vertexStream.Write<Vector3>(new Vector3(result.X, result.Y, result.Z));
+                            SharpDX.Vector3 normal = FromVector(normals[i]);
+                            SharpDX.Vector3.Transform(ref normal, ref invTranspose, out result);
+                            vertexStream.Write<SharpDX.Vector3>(new SharpDX.Vector3(result.X, result.Y, result.Z));
                         }
                         if (hasTangents)
                         {
                             Vector4 result;
-                            Vector3 tangent = FromVector(tangents[i]);
-                            Vector3.Transform(ref tangent, ref invTranspose, out result);
-                            vertexStream.Write<Vector3>(new Vector3(result.X, result.Y, result.Z));
+                            SharpDX.Vector3 tangent = FromVector(tangents[i]);
+                            SharpDX.Vector3.Transform(ref tangent, ref invTranspose, out result);
+                            vertexStream.Write<SharpDX.Vector3>(new SharpDX.Vector3(result.X, result.Y, result.Z));
                         }
                         if (hasBitangents)
                         {
                             Vector4 result;
-                            Vector3 biTangent = FromVector(biTangents[i]);
-                            Vector3.Transform(ref biTangent, ref invTranspose, out result);
-                            vertexStream.Write<Vector3>(new Vector3(result.X, result.Y, result.Z));
+                            SharpDX.Vector3 biTangent = FromVector(biTangents[i]);
+                            SharpDX.Vector3.Transform(ref biTangent, ref invTranspose, out result);
+                            vertexStream.Write<SharpDX.Vector3>(new SharpDX.Vector3(result.X, result.Y, result.Z));
                         }
                         if (hasTexCoords)
                         {
-                            vertexStream.Write<Vector2>(new Vector2(texCoords[i].X, 1 - texCoords[i].Y));
+                            vertexStream.Write<SharpDX.Vector2>(new SharpDX.Vector2(texCoords[i].X, 1 - texCoords[i].Y));
                         }
                     }
 
@@ -289,14 +289,14 @@ namespace AssimpWrapper
                     modelMesh.PrimitiveCount = mesh.FaceCount;
 
                     //get pointer to indices data
-                    uint[] indices = mesh.GetIndices();
+                    int[] indices = mesh.GetIndices();
 
                     //create data stream for indices
                     DataStream indexStream = new DataStream( indices.GetLength(0) * sizeof(uint), true, true);
 
                     for (int i = 0; i < indices.GetLength(0); i++)
                     {
-                        indexStream.Write<uint>(indices[i]);
+                        indexStream.Write<int>(indices[i]);
                     }
 
                     indexStream.Position = 0;
@@ -352,9 +352,9 @@ namespace AssimpWrapper
             return m;
         }
 
-        private Vector3 FromVector(Vector3D vec)
+        private SharpDX.Vector3 FromVector(Vector3D vec)
         {
-            Vector3 v;
+            SharpDX.Vector3 v;
             v.X = vec.X;
             v.Y = vec.Y;
             v.Z = vec.Z;

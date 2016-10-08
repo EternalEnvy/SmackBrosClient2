@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2010-2012 SharpDX - Alexandre Mutel
+// Copyright (c) 2010-2012 SharpDX - Alexandre Mutel
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,23 +31,30 @@ using AssimpWrapper;
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
 using MapFlags = SharpDX.Direct3D11.MapFlags;
-using System.Windows;
-using SmackBrosClient2.DirectX;
 
 namespace SmackBrosClient2
 {
     /// <summary>
-    /// Interaction logic for App.xaml
+    /// SharpDX MiniCubeTexture Direct3D 11 Sample
     /// </summary>
-    public partial class App : Application
+    internal static class Program
     {
-        [STAThread]
-        public static void Main()
+        //data to pass to the vertex and pixel shader
+        struct VertexShaderData
         {
-            var application = new App();
-            application.InitializeComponent();
-            application.Run();
+            public Matrix worldViewProj;
+            public Matrix worldView;
+            public Matrix world;
+        };
 
+        struct PixelShaderData
+        {
+            public Vector4 lightPos;
+        };
+
+        [STAThread]
+        private static void Main()
+        {
             var form = new RenderForm("SharpDX - Load Mesh Sample");
             form.Width = 1280;
             form.Height = 720;
@@ -212,8 +219,6 @@ namespace SmackBrosClient2
             context.Dispose();
             swapChain.Dispose();
             factory.Dispose();
-
         }
     }
-
 }

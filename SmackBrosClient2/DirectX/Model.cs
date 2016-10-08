@@ -7,12 +7,12 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using SharpDX.D3DCompiler;
-using AssimpWrapper;
+using Assimp;
 
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
 
-namespace LoadMesh
+namespace SmackBrosClient2.DirectX
 {
     // A container for the meshes loaded from the file
     class Model
@@ -20,22 +20,22 @@ namespace LoadMesh
         List<ModelMesh> m_meshes;
         bool m_inputLayoutSet;
 
-        Vector3 m_aaBoxMin;
-        public Vector3 AABoxMin
+        SharpDX.Vector3 m_aaBoxMin;
+        public SharpDX.Vector3 AABoxMin
         {
             set { m_aaBoxMin = value; }
             get { return m_aaBoxMin; }
         }
 
-        Vector3 m_aaBoxMax;
-        public Vector3 AABoxMax
+        SharpDX.Vector3 m_aaBoxMax;
+        public SharpDX.Vector3 AABoxMax
         {
             set { m_aaBoxMax = value; }
             get { return m_aaBoxMax; }
         }
 
-        Vector3 m_aaBoxCentre;
-        public Vector3 AABoxCentre
+        SharpDX.Vector3 m_aaBoxCentre;
+        public SharpDX.Vector3 AABoxCentre
         {
             set { m_aaBoxCentre = value; }
             get { return m_aaBoxCentre; }
@@ -52,7 +52,7 @@ namespace LoadMesh
             m_meshes.Add(mesh);
         }
 
-        public void SetAABox(Vector3 min, Vector3 max)
+        public void SetAABox(SharpDX.Vector3 min, SharpDX.Vector3 max)
         {
             m_aaBoxMin = min;
             m_aaBoxMax = max;

@@ -22,7 +22,7 @@ namespace SmackBrosClient2
     {
         public MainWindow()
         {
-            InitializeComponent();
+            
         }
     }
 }

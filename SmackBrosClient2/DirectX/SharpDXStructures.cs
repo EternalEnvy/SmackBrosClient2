@@ -7,16 +7,23 @@ using SharpDX.D3DCompiler;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
+using SharpDX.Windows;
 using Assimp;
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
 using MapFlags = SharpDX.Direct3D11.MapFlags;
-using System.Windows;
 
 namespace SmackBrosClient2.DirectX
 {
-    class Meshes : Window
+    struct VertexShaderData
     {
+        public Matrix worldViewProj;
+        public Matrix worldView;
+        public Matrix world;
+    };
 
-    }
+    struct PixelShaderData
+    {
+        public OpenTK.Vector4 lightPos;
+    };
 }
