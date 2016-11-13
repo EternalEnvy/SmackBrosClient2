@@ -1,0 +1,37 @@
+#version 420
+layout (location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in vec3 tangent;
+layout(location = 3) in vec3 color;
+layout(location = 4) in vec2 texCoord;
+layout(location = 5) in ivec4 boneIDs;
+layout(location = 6) in vec4 weights;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform mat4 model;
+uniform mat4 bones[100];
+
+out vec2 TexCoord;
+out vec4 colorz;
+
+void main()
+{
+    vec4 newPos = vec4(position, 1.0);
+    colorz = vec4(0.0, 1.0, 0.0, 1.0);
+    if (weights != vec4(0.0, 0.0, 0.0, 0.0))
+    {
+        mat4 boneTransform = bones[boneIDs[0]] * weights[0];
+        boneTransform += bones[boneIDs[1]] * weights[1];
+        boneTransform += bones[boneIDs[2]] * weights[2];
+        boneTransform += bones[boneIDs[3]] * weights[3];
+
+        // newPos = boneTransform * vec4(position, 1.0);
+        vec4 test = vec4(1.0);
+        colorz = boneTransform * test;
+        // newPos = boneTransform * newPos;
+    }
+
+    TexCoord = texCoord;
+    gl_Position = projection * view * model * newPos;
+}

@@ -97,6 +97,62 @@
     </Compile>
     <Compile Include="DirectX\RenderLoop.cs" />
     <Compile Include="DirectX\SharpDXStructures.cs" />
+    <Compile Include="OpenGL\Abstraction\DynamicShader.cs" />
+    <Compile Include="OpenGL\GLException.cs" />
+    <Compile Include="OpenGL\GLRef.cs" />
+    <Compile Include="OpenGL\Interface\Buffers\DataBuffer.cs" />
+    <Compile Include="OpenGL\Interface\Buffers\Databuffers.cs" />
+    <Compile Include="OpenGL\Interface\Buffers\Databuffers1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Databuffers.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Interface\Buffers\Framebuffer.cs" />
+    <Compile Include="OpenGL\Interface\Buffers\Framebuffer1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Framebuffer.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Interface\Buffers\Renderbuffer.cs" />
+    <Compile Include="OpenGL\Interface\Data\Vertices.cs" />
+    <Compile Include="OpenGL\Interface\Data\Vertices1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Vertices.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Interface\Drawing\VertexArray.cs" />
+    <Compile Include="OpenGL\Interface\GLO.cs" />
+    <Compile Include="OpenGL\Interface\Shaders\Shader.cs" />
+    <Compile Include="OpenGL\Interface\Shaders\ShaderProgram.cs" />
+    <Compile Include="OpenGL\Interface\Shaders\UniformBinding.cs" />
+    <Compile Include="OpenGL\Interface\Shaders\UniformBinding1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>UniformBinding.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Interface\Textures\Texture.cs" />
+    <Compile Include="OpenGL\Interface\Textures\Textures.cs" />
+    <Compile Include="OpenGL\Interface\Textures\Textures1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Textures.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Levels\Intermediate\Shaders\Shader.cs" />
+    <Compile Include="OpenGL\NGL.cs" />
+    <Compile Include="OpenGL\NGL1.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>NGL.tt</DependentUpon>
+    </Compile>
+    <Compile Include="OpenGL\Utilities\Camera.cs" />
+    <Compile Include="OpenGL\Utilities\FpsCamera.cs" />
+    <Compile Include="OpenGL\Utilities\IO\FileListener.cs" />
+    <Compile Include="OpenGL\Utilities\ISized.cs" />
+    <Compile Include="OpenGL\Utilities\Mesh.cs" />
+    <Compile Include="OpenGL\Utilities\MeshLoader.cs" />
+    <Compile Include="OpenGL\Utilities\Platform.cs" />
+    <Compile Include="OpenGL\Utilities\Projector.cs" />
+    <Compile Include="OpenGL\Utilities\ScreenRender.cs" />
     <Compile Include="Screens\GameplayScreen.cs" />
     <Compile Include="GameObjects\GameTime.cs" />
     <Compile Include="GameObjects\Hitbox.cs" />
@@ -153,6 +209,30 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <None Include="OpenGL\Interface\Buffers\Databuffers.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Databuffers1.cs</LastGenOutput>
+    </None>
+    <None Include="OpenGL\Interface\Buffers\Framebuffer.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Framebuffer1.cs</LastGenOutput>
+    </None>
+    <None Include="OpenGL\Interface\Data\Vertices.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Vertices1.cs</LastGenOutput>
+    </None>
+    <None Include="OpenGL\Interface\Shaders\UniformBinding.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>UniformBinding1.cs</LastGenOutput>
+    </None>
+    <None Include="OpenGL\Interface\Textures\Textures.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>Textures1.cs</LastGenOutput>
+    </None>
+    <None Include="OpenGL\NGL.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>NGL1.cs</LastGenOutput>
+    </None>
     <None Include="OpenTK.dll.config" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -163,6 +243,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="OpenGL\Shaders\AnimatedBoneVertexShader.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\AssimpNet.3.3.1\build\AssimpNet.targets" Condition="Exists('..\packages\AssimpNet.3.3.1\build\AssimpNet.targets')" />

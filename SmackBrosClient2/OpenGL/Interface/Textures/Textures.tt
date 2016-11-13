@@ -1,0 +1,148 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="C:\Files\Dropbox\Coding\C#\OGLFV_Projects\Libraries\OpenTK.dll" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Runtime.InteropServices" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="OpenTK.Graphics.OpenGL" #>
+<#@ output extension=".cs" #>
+using System;
+#if OPENGL4
+using OpenTK.Graphics.OpenGL4;
+using PIF = OpenTK.Graphics.OpenGL4.PixelInternalFormat;
+using PF = OpenTK.Graphics.OpenGL4.PixelFormat;
+using PT = OpenTK.Graphics.OpenGL4.PixelType;
+#else
+using OpenTK.Graphics.OpenGL;
+using PIF = OpenTK.Graphics.OpenGL.PixelInternalFormat;
+using PF = OpenTK.Graphics.OpenGL.PixelFormat;
+using PT = OpenTK.Graphics.OpenGL.PixelType;
+#endif
+
+namespace NeptuneRenderEngine.Engine.Interface.Textures
+{
+<#
+	var texDatas = new []
+	{
+		new TexData(){PostFix = "1D", SizeLength = 1, TextureTarget = TextureTarget.Texture1D}, 
+		new TexData(){PostFix = "2D", SizeLength = 2, TextureTarget = TextureTarget.Texture2D}, 
+		new TexData(){PostFix = "3D", SizeLength = 3, TextureTarget = TextureTarget.Texture3D}
+	
+	};
+	var paramNames = new[] {"xSize", "ySize", "zSize"};
+	var offsetParamNames = new[] {"xOffset", "yOffset", "zOffset"};
+	var sizeNames = new[] {"Width", "Height", "Depth"};
+	var sizeClassNames = sizeNames.Select(item => "_" + item.ToLower()).ToArray();
+
+	const string sizeType = "int";
+
+	var dataTypes = new []
+	{
+		new DataType(){Type = "IntPtr", DefaultValue = "default(IntPtr)", Name = "data"},
+		new DataType(){Modifier = "ref ", Type = "T", Name = "data", GenericConstraint = "T"},
+		new DataType(){Type = "T[]", Name = "data", GenericConstraint = "T"},
+		new DataType(){Type = "T[,]", Name = "data", GenericConstraint = "T"},
+		new DataType(){Type = "T[,,]", Name = "data", GenericConstraint = "T"}
+	};
+	foreach (var data in texDatas)
+	{
+		var paramStr = paramNames.Take(data.SizeLength).Select(item => sizeType + " "  + item).Aggregate((s, s1) => s + ", " + s1);
+		var callStr = paramNames.Take(data.SizeLength).Select(item => item).Aggregate((s, s1) => s + ", " + s1);
+		var offsetStr = offsetParamNames.Take(data.SizeLength).Select(item => sizeType + " "  + item).Aggregate((s, s1) => s + ", " + s1);
+		var offsetCallStr = offsetParamNames.Take(data.SizeLength).Select(item => item).Aggregate((s, s1) => s + ", " + s1);
+
+		var boundariesStr = string.Format("private {0} {1};", sizeType, sizeClassNames.Take(data.SizeLength).Aggregate((s, s1) => s + ", " + s1));
+
+		var boundariesRetStr = sizeClassNames.Take(data.SizeLength).Aggregate((s, s1) => s + ", " + s1);
+
+		var sizeIndividualStr = "";
+		for (int i = 0; i < data.SizeLength; i++)
+		{
+			sizeIndividualStr += string.Format("\n\n\t\tpublic {0} Get{1}() \n\t\t{{\n\t\t\treturn {2};\n\t\t}}", sizeType, sizeNames[i], sizeClassNames[i]);
+		}
+
+		const string assignFormat = "{0} = {1}; ";
+		const string testFormat = "{0} < 0 || {0} + {1} >= {2} || ";
+		var boundariesAssignStr = "";
+		for (int i = 0; i < data.SizeLength; i++)
+		{
+			boundariesAssignStr += string.Format(assignFormat, sizeClassNames[i], paramNames[i]);
+		}
+		var boundariesCheckStr = ""; //string.Format("private {0} {1};", sizeType, )
+		for (int i = 0; i < data.SizeLength; i++)
+		{
+			boundariesCheckStr += string.Format(testFormat, offsetParamNames[i], paramNames[i], sizeClassNames[i]);
+		}
+		boundariesCheckStr = String.Format("if({0})\n\t\t\t\tthrow new GLException(\"Image sub data out of bounds!\");", boundariesCheckStr.Substring(0, boundariesCheckStr.Length-4));
+
+#>	public class Texture<#= data.PostFix #> : Texture
+	{
+		<#= boundariesStr #>
+
+		public Texture<#= data.PostFix #>() : base(TextureTarget.<#= data.TextureTarget #>)
+		{
+		}
+
+		public Texture<#= data.PostFix #>(int defaultID) : base(TextureTarget.<#= data.TextureTarget #>, defaultID)
+		{
+		}<#
+		foreach (var dataType in dataTypes)
+		{
+			var genericConstraint = !string.IsNullOrEmpty(dataType.GenericConstraint) ? string.Format("<{0}>", dataType.GenericConstraint): "";
+			var dataParam = !string.IsNullOrEmpty(dataType.GenericConstraint) ? string.Format("<{0}>", dataType.GenericConstraint): "";
+			var structConstraint = !string.IsNullOrEmpty(dataType.GenericConstraint) ? " where T : struct" : "";
+			#>
+		
+		public void TexImage<#= genericConstraint #>(<#= paramStr #>, <#= dataType.Signature #>, PIF pif = PIF.Rgb, PF pf = PF.Rgb, PT pt = PT.UnsignedByte, int mipMapLevel = 0)<#= structConstraint #>
+		{
+			<#= boundariesAssignStr #>
+			BindingHelper<Texture<#= data.PostFix #>>.Push(this);
+			GL.TexImage<#= data.PostFix #>(TextureTarget, mipMapLevel, pif, <#= callStr #>, 0, pf, pt, <#= dataType.Call #>);
+			BindingHelper<Texture<#= data.PostFix #>>.Pop();
+		}
+		
+		public void TexSubImage<#= genericConstraint #>(<#= offsetStr #>, <#= paramStr #>, <#= dataType.Signature #>, PF pf = PF.Rgb, PT pt = PT.UnsignedByte, int mipMapLevel = 0)<#= structConstraint #>
+		{
+			<#= boundariesCheckStr #>
+			BindingHelper<Texture<#= data.PostFix #>>.Push(this);
+			GL.TexSubImage<#= data.PostFix #>(TextureTarget, mipMapLevel, <#= offsetCallStr #>, <#= callStr #>, pf, pt, <#= dataType.Call #>);
+			BindingHelper<Texture<#= data.PostFix #>>.Pop();
+		}
+<# } #>
+		
+		public void SetTextureMagFilter(TextureMagFilter filter)
+		{
+			BindingHelper<Texture<#= data.PostFix #>>.Use(this, t => GL.TexParameter(TextureTarget, TextureParameterName.TextureMagFilter, (int)filter));
+		}
+
+		public void SetTextureMinFilter(TextureMinFilter filter)
+		{
+			BindingHelper<Texture<#= data.PostFix #>>.Use(this, t => GL.TexParameter(TextureTarget, TextureParameterName.TextureMinFilter, (int)filter));
+		}
+
+		public <#= sizeType #>[] GetSize()
+		{
+			return new[] { <#= boundariesRetStr #> };
+		}<#= sizeIndividualStr #>
+	}
+<# } #>
+}<#+
+	struct TexData
+	{
+		public string PostFix;
+		public int SizeLength;
+		public TextureTarget TextureTarget;
+	}
+
+	struct DataType
+	{
+		public string Signature { get { return String.Format("{3}{0} {1}{2}", Type, Name, string.IsNullOrEmpty(DefaultValue) ? "" : String.Format(" = {0}", DefaultValue), Modifier);}}
+		public string Call { get { return String.Format("{1}{0}", Name, Modifier);}}
+		public string GenericConstraint;
+		public string Type;
+		public string Modifier;
+		public string Name;
+		public string DefaultValue;
+	}
+#>

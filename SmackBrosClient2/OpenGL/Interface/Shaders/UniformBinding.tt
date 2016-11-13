@@ -1,0 +1,105 @@
+﻿<#@ template debug="true" hostspecific="false" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="C:\Files\Dropbox\Coding\C#\OGLFV_Projects\Libraries\OpenTK.dll" #>
+<#@ import namespace="OpenTK.Graphics.OpenGL" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Reflection" #>
+
+using System.Collections.Generic;
+using OpenTK;
+#if OPENGL4
+using OpenTK.Graphics.OpenGL4;
+#else
+using OpenTK.Graphics.OpenGL;
+#endif
+
+<#
+	var types = new[] {"int", "uint", "float"};
+
+	var funcs = new Func[]
+	{
+	    new Func("int",		1,	"1"),
+	    new Func("uint",	1,	"1"),
+	    new Func("float",	1,	"1"),
+	    new Func("int",		2,	"2"),
+	    new Func("uint",	2,	"2"),
+	    new Func("float",	2,	"2"),
+	    new Func("Vector2",	1,	"2", false),
+	    new Func("int",		3,	"3"),
+	    new Func("uint",	3,	"3"),
+	    new Func("float",	3,	"3"),
+	    new Func("Vector3",	1,	"3", false),
+	    new Func("int",		4,	"4"),
+	    new Func("uint",	4,	"4"),
+	    new Func("float",	4,	"4"),
+	    new Func("Vector4",	1,	"4", false)
+	};
+#>
+
+namespace NeptuneRenderEngine.Engine.Interface.Shaders
+{
+	public class UniformBinding
+	{
+		public readonly string Name;
+		public int Position { get; private set; }
+		private readonly ShaderProgram _program;
+
+		public UniformBinding(string name, int pos, ShaderProgram program)
+		{
+			Name = name;
+			Position = pos;
+			_program = program;
+		}
+
+        public void Update()
+        {
+            BindingHelper<ShaderProgram>.Use(_program, program => { Position = GL.GetUniformLocation(program.ID, Name); });
+        }
+<# foreach (var func in funcs)
+{ 
+	var paramStr = Enumerable.Range(0, func.Length).Select(item => func.Type + " " + func.Type.ToLower() + (!func.Numbered ? "" : item.ToString())).Aggregate((s, s1) => s + ", " + s1);
+	var callStr = Enumerable.Range(0, func.Length).Select(item => func.Type.ToLower() + (!func.Numbered ? "" : item.ToString())).Aggregate((s, s1) => s + ", " + s1);
+#>
+
+		public void Set(<#= paramStr #>)
+		{
+			if(Position < 0) return;
+			BindingHelper<ShaderProgram>.Use(_program, program => GL.Uniform<#= func.UniformType #>(Position, <#= callStr #>));
+		}
+<# } #>
+
+		public void Set(Matrix4 matrix, bool transpose = false)
+		{
+			Set(ref matrix, transpose);
+		}
+
+		public void Set(ref Matrix4 matrix, bool transpose = false)
+		{
+			if(Position < 0) return;
+			BindingHelper<ShaderProgram>.Push(_program); 
+			GL.UniformMatrix4(Position, transpose, ref matrix);
+			BindingHelper<ShaderProgram>.Pop(); 
+		}
+	}
+}
+
+<#+
+
+	struct Func
+	{
+		public string Type;
+		public int Length;
+		public string UniformType;
+		public bool Numbered;
+
+		public Func(string type, int len, string uniType, bool useNumbered = true)
+		{
+			Type = type;
+			Length = len;
+			UniformType = uniType;
+		    Numbered = useNumbered;
+		}
+	}
+#>

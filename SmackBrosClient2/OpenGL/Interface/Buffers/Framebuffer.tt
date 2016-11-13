@@ -1,0 +1,155 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="C:\Files\Dropbox\Coding\Source Control\Neptune Render Engine\bin\Debug\OpenTK.dll" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="OpenTK.Graphics.OpenGL" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#
+    var textureAttachments = new TypePair[]
+        {
+			new TypePair("Texture", "texture"),
+			new TypePair("Texture1D", "texture"),
+			new TypePair("Texture2D", "texture"),
+			new TypePair("Texture3D", "texture")        };  
+		//0, IntPtr.Zero, PixelInternalFormat.DepthComponent, PixelFormat.DepthComponent, PixelType.Float, lodLevel
+	var textureCreateAttachments = new CreateType[]
+        {
+			new CreateType("Texture1D", "texture",
+				new TypePair("int", "length"),
+				new TypePair("IntPtr", "IntPtr.Zero", true),
+				new TypePair("PIF", "pif"),
+				new TypePair("PF", "pf"),
+				new TypePair("PT", "pt")),
+			new CreateType("Texture2D", "texture",
+				new TypePair("int", "width"),
+				new TypePair("int", "height"),
+				new TypePair("IntPtr", "IntPtr.Zero", true),
+				new TypePair("PIF", "pif"),
+				new TypePair("PF", "pf"),
+				new TypePair("PT", "pt")),
+			new CreateType("Texture3D", "texture",
+				new TypePair("int", "width"),
+				new TypePair("int", "height"),
+				new TypePair("int", "depth"),
+				new TypePair("IntPtr", "IntPtr.Zero", true),
+				new TypePair("PIF", "pif"),
+				new TypePair("PF", "pf"),
+				new TypePair("PT", "pt"))
+        };
+#>
+using System;
+using NeptuneRenderEngine.Engine.Interface.Textures;
+#if OPENGL4
+using OpenTK.Graphics.OpenGL4;
+using PIF = OpenTK.Graphics.OpenGL4.PixelInternalFormat;
+using PF = OpenTK.Graphics.OpenGL4.PixelFormat;
+using PT = OpenTK.Graphics.OpenGL4.PixelType;
+#else
+using OpenTK.Graphics.OpenGL;
+using PIF = OpenTK.Graphics.OpenGL.PixelInternalFormat;
+using PF = OpenTK.Graphics.OpenGL.PixelFormat;
+using PT = OpenTK.Graphics.OpenGL.PixelType;
+#endif
+
+namespace NeptuneRenderEngine.Engine.Interface.Buffers
+{
+    public abstract class FBO<T> : GLO where T : FBO<T>, new()
+    {
+        public readonly FramebufferTarget FramebufferTarget;
+
+        protected FBO(FramebufferTarget framebufferTarget, int defaultID = 0) : base(framebufferTarget.ToString(), defaultID)
+        {
+            FramebufferTarget = framebufferTarget;
+        }
+
+        protected override int Generate()
+        {
+            int i;
+            GL.GenFramebuffers(1, out i);
+            return i;
+        }
+
+        public override void Delete()
+        {
+            GL.DeleteFramebuffer(ID);
+        }
+
+        public override void Bind(int id)
+        {
+            GL.BindFramebuffer(FramebufferTarget, id);
+        }
+
+<#	foreach (var attach in textureAttachments)
+	{#>
+		public void AttachTexture(<#= attach.Type #> <#= attach.Name #>, FramebufferAttachment attachment, int lodLevel = 0) { 
+			BindingHelper<T>.Use((T)this, t => GL.FramebufferTexture(FramebufferTarget, attachment, <#= attach.Name #>.ID, lodLevel)); }
+<#}#>
+
+        public void AttachRenderbuffer<TRbo>(RBO<TRbo> renderBuffer, FramebufferAttachment attachment) where TRbo : RBO<TRbo>, new() { 
+			BindingHelper<T>.Use((T)this, obj => GL.FramebufferRenderbuffer(FramebufferTarget, attachment, renderBuffer.RenderbufferTarget, renderBuffer.ID)); }
+
+<#	foreach (var attach in textureCreateAttachments)
+	{
+		string pass = attach.Pairs != null && attach.Pairs.Length > 0 ? (attach.Pairs.Where(item => !item.Hide).Select(item => string.Format("{0} {1}", item.Type, item.Name)).Aggregate((s, s1) => s + ", " + s1) + ", ") : "";
+		string call = attach.Pairs != null && attach.Pairs.Length > 0 ? (attach.Pairs.Select(item => item.Name).Aggregate((s, s1) => s + ", " + s1)) : "";
+#>
+		public <#= attach.Type #> Attach<#= attach.Type #>(<#= pass #>FramebufferAttachment attachment, int lodLevel = 0)
+		{ 
+			var tex = new <#= attach.Type #>();
+			tex.TexImage(<#=call#>);
+            tex.SetTextureMagFilter(TextureMagFilter.Linear);
+            tex.SetTextureMinFilter(TextureMinFilter.Linear);
+            GL.TexParameter(tex.TextureTarget, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
+            GL.TexParameter(tex.TextureTarget, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
+            GL.TexParameter(tex.TextureTarget, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToBorder);
+			BindingHelper<T>.Use((T)this, t => GL.FramebufferTexture(FramebufferTarget, attachment, tex.ID, lodLevel)); 
+			return tex;
+		}
+
+<#}#>
+		public void DrawBuffers(params DrawBuffersEnum[] enums)
+		{
+			BindingHelper<T>.Use((T)this, t => GL.DrawBuffers(enums.Length, enums)); 
+		}
+    }
+
+<#	foreach (var t in Enum.GetNames(typeof (OpenTK.Graphics.OpenGL4.FramebufferTarget))) {#>
+	public class <#= t #> : FBO<<#= t #>> 
+	{
+		public <#= t #>() : base(FramebufferTarget.<#= t #>) { }
+        public <#= t #>(int defaultID = 0) : base(FramebufferTarget.<#= t #>, defaultID) { }
+	}
+<#  } #>
+}
+<#+ 
+	struct TypePair
+	{
+	    public string Type;
+	    public string Name;
+	    public bool Hide;
+
+		public TypePair(string t, string n, bool hide = false)
+		{
+		    Type = t;
+		    Name = n;
+		    Hide = hide;
+		}
+
+	}
+	struct CreateType
+	{
+	    public string Type;
+	    public string Name;
+	    public TypePair[] Pairs;
+
+		public CreateType(string t, string n, params TypePair[] pairs)
+		{
+		    Type = t;
+		    Name = n;
+		    Pairs = pairs;
+		}
+	}
+
+#>

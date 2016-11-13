@@ -8,6 +8,6 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("sharpdx.wpf/sharpdx.wpf.csproj")]
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("opengl/shaders/animatedbonevertexshader.txt")]
 
 

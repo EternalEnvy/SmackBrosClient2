@@ -24,6 +24,6 @@ namespace SmackBrosClient2.DirectX
 
     struct PixelShaderData
     {
-        public OpenTK.Vector4 lightPos;
+        public SharpDX.Vector4 lightPos;
     };
 }

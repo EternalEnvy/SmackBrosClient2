@@ -14,12 +14,83 @@ using System.IO;
 
 namespace SmackBrosClient2.OpenGL
 {
-    public class cAnimationChannel
+    public class SmackerModel
+    {
+        Vector3D min = new Vector3D(float.MinValue);
+        Vector3D max = new Vector3D(float.MaxValue);
+        SceneAnimator Animator;
+        public SmackerModel()
+        {
+            //EXAMPLE OF HOW TO USE ANIMATIONS
+            var importer = new AssimpContext();
+            var model = importer.ImportFile("test.mtl");
+            Animator.Init(model);
+            var vertToBoneWeight = new Dictionary<int, List<VertexWeight>>();
+            foreach(Mesh mesh in model.Meshes)
+            {
+                ExtractBoneWeightsFromMesh(mesh, vertToBoneWeight);
+            }
+        }
+        private void ExtractBoneWeightsFromMesh(Mesh mesh, IDictionary<int, List<VertexWeight>> vertToBoneWeight)
+        {
+            foreach (var bone in mesh.Bones)
+            {
+                var boneIndex = Animator.GetBoneIndex(bone.Name);
+                // bone weights are recorded per bone in assimp, with each bone containing a list of the vertices influenced by it
+                // we really want the reverse mapping, i.e. lookup the vertexID and get the bone id and weight
+                // We'll support up to 4 bones per vertex, so we need a list of weights for each vertex
+                foreach (var weight in bone.VertexWeights)
+                {
+                    if (vertToBoneWeight.ContainsKey(weight.VertexID))
+                    {
+                        vertToBoneWeight[weight.VertexID].Add(new VertexWeight((int)boneIndex, weight.Weight));
+                    }
+                    else
+                    {
+                        vertToBoneWeight[weight.VertexID] = new List<VertexWeight>(
+                            new[] { new VertexWeight((int)boneIndex, weight.Weight) }
+                        );
+                    }
+                }
+            }
+        }
+        private IEnumerable<PosNormalTexTanSkinned> ExtractVertices(Mesh mesh, IReadOnlyDictionary<uint, List<VertexWeight>> vertToBoneWeights, bool flipTexY)
+        {
+            var verts = new List<PosNormalTexTanSkinned>();
+            for (var i = 0; i < mesh.VertexCount; i++)
+            {
+                var pos = mesh.HasVertices ? mesh.Vertices[i].ToVector3() : new Vector3D();
+                min = Vector3D.Minimize(min, pos);
+                max = Vector3D.Maximize(max, pos);
+
+                var norm = mesh.HasNormals ? mesh.Normals[i] : new Vector3D();
+
+                var tan = mesh.HasTangentBasis ? mesh.Tangents[i] : new Vector3D();
+                var texC = new Vector3D();
+                if (mesh.HasTextureCoords(0))
+                {
+                    var coord = mesh.TextureCoordinateChannels[0][i];
+                    if (flipTexY)
+                    {
+                        coord.Y = -coord.Y;
+                    }
+                    texC = coord;
+                }
+                var weights = vertToBoneWeights[(uint)i].Select(w => w.Weight).ToArray();
+                var boneIndices = vertToBoneWeights[(uint)i].Select(w => (byte)w.VertexID).ToArray();
+
+                var v = new PosNormalTexTanSkinned(pos, norm.ToVector3(), texC.ToVector2(), tan.ToVector3(), weights.First(), boneIndices);
+                verts.Add(v);
+            }
+            return verts;
+        }
+    }
+    public class AnimationChannel
     {
         public string Name;
-        public List<VectorKey> mPositionKeys;
-        public List<QuaternionKey> mRotationKeys;
-        public List<VectorKey> mScalingKeys;
+        public List<VectorKey> PositionKeys;
+        public List<QuaternionKey> RotationKeys;
+        public List<VectorKey> ScalingKeys;
     }
     public class cBone 
     {
@@ -32,42 +103,43 @@ namespace SmackBrosClient2.OpenGL
             Parent = null;
         }
     }
-    public class cAnimEvaluator
+    public class AnimEvaluator
     {
         public bool PlayAnimationForward;// play forward == true, play backward == false
-        public List<cAnimationChannel> Channels;
-        public float mLastTime, TicksPerSecond, Duration;
+        public List<AnimationChannel> Channels;
+        public float LastTime, TicksPerSecond, Duration;
         public string Name;
-        public List<Tuple<int,int,int>> mLastPositions;
+        public List<Tuple<int,int,int>> LastPositions;
         public List<List<Matrix4x4>> Transforms;
-        public cAnimEvaluator() 
+        public AnimEvaluator() 
         {
-            mLastTime = 0.0f; 
+            LastTime = 0.0f; 
             TicksPerSecond = 0.0f;
             Duration = 0.0f; 
             PlayAnimationForward = true; 
         }
-	    public cAnimEvaluator(Animation pAnim)
+        public AnimEvaluator(Animation anim)
         {
-            mLastTime = 0.0f;
-	        TicksPerSecond = (float)(pAnim.TicksPerSecond != 0.0f ? pAnim.TicksPerSecond : 100.0f);
-	        Duration = (float)(pAnim.DurationInTicks);
-	        Name = pAnim.Name;
-	        //OUTPUT_DEBUG_MSG("Creating Animation named: "<<Name);
-	        //Channels.resize(pAnim.MeshAnimationChannelCount);
-	        for(int a = 0; a < pAnim.NodeAnimationChannelCount; a++)
+            LastTime = 0.0f;
+            TicksPerSecond = anim.TicksPerSecond > 0.0f ? (float)anim.TicksPerSecond : 920.0f;
+            Duration = (float)anim.DurationInTicks;
+            Name = anim.Name;
+            Channels = new List<AnimationChannel>();
+            foreach (var channel in anim.NodeAnimationChannels)
             {
-                Channels[a].Name = pAnim.NodeAnimationChannels[a].NodeName;
-		        for(int i = 0; i < pAnim.NodeAnimationChannels[a].PositionKeyCount; i++)
-                    Channels[a].mPositionKeys.Add(pAnim.NodeAnimationChannels[a].PositionKeys[i]); 
-                for(int j = 0; j < pAnim.NodeAnimationChannels[a].RotationKeyCount; j++) 
-                    Channels[a].mRotationKeys.Add(pAnim.NodeAnimationChannels[a].RotationKeys[j]);
-                for(int k = 0; k < pAnim.NodeAnimationChannels[a].ScalingKeyCount; k++) 
-                    Channels[a].mScalingKeys.Add(pAnim.NodeAnimationChannels[a].ScalingKeys[k]);
+                var c = new AnimationChannel
+                {
+                    Name = channel.NodeName,       
+                    PositionKeys = channel.PositionKeys.ToList(),
+                    RotationKeys = channel.RotationKeys.ToList(),
+                    ScalingKeys = channel.ScalingKeys.ToList()
+                };
+                Channels.Add(c);
             }
-            //mLastPositions.resize( pAnim->mNumChannels, std::make_tuple( 0, 0, 0));
-	        //OUTPUT_DEBUG_MSG("Finished Creating Animation named: "<<Name);
-	    } 
+            LastPositions = Enumerable.Repeat(new Tuple<int, int, int>(0, 0, 0), anim.NodeAnimationChannelCount).ToList();
+            Transforms = new List<List<Matrix4x4>>();
+            PlayAnimationForward = true;
+        }
 	    public void Evaluate( float pTime, Dictionary<string,cBone> bones)
         {
 	        pTime *= TicksPerSecond;
@@ -79,7 +151,7 @@ namespace SmackBrosClient2.OpenGL
 	        // calculate the transformations for each animation channel
 	        for(int a = 0; a < Channels.Count(); a++)
             {
-		        cAnimationChannel channel = Channels[a];
+		        AnimationChannel channel = Channels[a];
                 cBone bonenode;
                 bool found = bones.TryGetValue(channel.Name, out bonenode);
                 //std::map<std::string, cBone*>::iterator bonenode = bones.find(channel->Name);
@@ -91,23 +163,23 @@ namespace SmackBrosClient2.OpenGL
 		        }
 		        // ******** Position *****
 		        Vector3D presentPosition = new Vector3D(0, 0, 0);
-		        if(channel.mPositionKeys.Count > 0){
+		        if(channel.PositionKeys.Count > 0){
 			        // Look for present frame number. Search from last position if time is after the last time, else from beginning
 			        // Should be much quicker than always looking from start for the average use case.
-			        int frame = (time >= mLastTime) ? mLastPositions[a].Item1 : 0;
-			        while( frame < channel.mPositionKeys.Count() - 1)
+			        int frame = (time >= LastTime) ? LastPositions[a].Item1 : 0;
+			        while( frame < channel.PositionKeys.Count() - 1)
                     {
-				        if(time < channel.mPositionKeys[frame+1].Time)
+				        if(time < channel.PositionKeys[frame+1].Time)
                         {
 					        break;
 				        }
 				        frame++;
 			        }
 			        // interpolate between this frame's value and next frame's value
-			        int nextFrame = (frame + 1) % channel.mPositionKeys.Count();
+			        int nextFrame = (frame + 1) % channel.PositionKeys.Count();
 	
-			        VectorKey key = channel.mPositionKeys[frame];
-			        VectorKey nextKey = channel.mPositionKeys[nextFrame];
+			        VectorKey key = channel.PositionKeys[frame];
+			        VectorKey nextKey = channel.PositionKeys[nextFrame];
 			        double diffTime = nextKey.Time - key.Time;
 			        if( diffTime < 0.0)
 				        diffTime += Duration;
@@ -120,25 +192,25 @@ namespace SmackBrosClient2.OpenGL
                     {
 				        presentPosition = key.Value;
 			        }
-			        mLastPositions[a] = new Tuple<int,int,int>(frame, mLastPositions[a].Item2, mLastPositions[a].Item3);
+			        LastPositions[a] = new Tuple<int,int,int>(frame, LastPositions[a].Item2, LastPositions[a].Item3);
 		        }
 		        // ******** Rotation *********
 		        Quaternion presentRotation = new Quaternion(1, 0, 0, 0);
-		        if(channel.mRotationKeys.Count() > 0)
+		        if(channel.RotationKeys.Count() > 0)
 		        {
-			        int frame = (time >= mLastTime) ? mLastPositions[a].Item2 : 0;
-			        while( frame < channel.mRotationKeys.Count()  - 1)
+			        int frame = (time >= LastTime) ? LastPositions[a].Item2 : 0;
+			        while( frame < channel.RotationKeys.Count()  - 1)
                     {
-				        if( time < channel.mRotationKeys[frame+1].Time)
+				        if( time < channel.RotationKeys[frame+1].Time)
 				        	break;
 			        	frame++;
 		        	}
 
 		        	// interpolate between this frame's value and next frame's value
-		        	int nextFrame = (frame + 1) % channel.mRotationKeys.Count();
+		        	int nextFrame = (frame + 1) % channel.RotationKeys.Count();
 
-		        	QuaternionKey key = channel.mRotationKeys[frame];
-		            QuaternionKey nextKey = channel.mRotationKeys[nextFrame];
+		        	QuaternionKey key = channel.RotationKeys[frame];
+		            QuaternionKey nextKey = channel.RotationKeys[nextFrame];
 		        	double diffTime = nextKey.Time - key.Time;
 		        	if( diffTime < 0.0) diffTime += Duration;
 		        	if( diffTime > 0) 
@@ -148,21 +220,21 @@ namespace SmackBrosClient2.OpenGL
 		        		presentRotation *= Quaternion.Slerp(key.Value, nextKey.Value, factor);
 		        	} 
                     else presentRotation = key.Value;
-	        		mLastPositions[a] = new Tuple<int,int,int>(mLastPositions[a].Item1, frame, mLastPositions[a].Item3);
+	        		LastPositions[a] = new Tuple<int,int,int>(LastPositions[a].Item1, frame, LastPositions[a].Item3);
 	        	}
 
 		        // ******** Scaling **********
 		        Vector3D presentScaling = new Vector3D(1, 1, 1);
-		        if(channel.mScalingKeys.Count() > 0) 
+		        if(channel.ScalingKeys.Count() > 0) 
                 {
-		        	int frame = (time >= mLastTime) ? mLastPositions[a].Item3 : 0;
-		        	while( frame < channel.mScalingKeys.Count() - 1){
-		        		if( time < channel.mScalingKeys[frame+1].Time)
+		        	int frame = (time >= LastTime) ? LastPositions[a].Item3 : 0;
+		        	while( frame < channel.ScalingKeys.Count() - 1){
+		        		if( time < channel.ScalingKeys[frame+1].Time)
 		        			break;
 			        	frame++;
 		        	}
-		        	presentScaling = channel.mScalingKeys[frame].Value;
-		        	mLastPositions[a] = new Tuple<int,int,int>(mLastPositions[a].Item1, mLastPositions[a].Item2, frame);
+		        	presentScaling = channel.ScalingKeys[frame].Value;
+		        	LastPositions[a] = new Tuple<int,int,int>(LastPositions[a].Item1, LastPositions[a].Item2, frame);
 	        	}
 
 	        	Matrix4x4 mat = new Matrix4x4(presentRotation.GetMatrix());
@@ -177,7 +249,7 @@ namespace SmackBrosClient2.OpenGL
                 bonenode.LocalTransform = mat;
                 //TransformMatrix(bonenode->second->LocalTransform, mat);
         	}
-	        mLastTime = time;
+	        LastTime = time;
         }
 	    /*public void Save(StreamWriter file)
         {
@@ -194,25 +266,25 @@ namespace SmackBrosClient2.OpenGL
 		        file.write(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the size of the name
 		        file.write(Channels[j].Name.c_str(), nsize);// the size of the animation name
 
-		        nsize =static_cast<uint32_t>(Channels[j].mPositionKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].PositionKeys.size());
 		        file.write(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.write(reinterpret_cast<char*>(&Channels[j].mPositionKeys[i].mTime), sizeof(Channels[j].mPositionKeys[i].mTime));// pos key
-			        file.write(reinterpret_cast<char*>(&Channels[j].mPositionKeys[i].mValue), sizeof(Channels[j].mPositionKeys[i].mValue));// pos key
+			        file.write(reinterpret_cast<char*>(&Channels[j].PositionKeys[i].mTime), sizeof(Channels[j].PositionKeys[i].mTime));// pos key
+			        file.write(reinterpret_cast<char*>(&Channels[j].PositionKeys[i].mValue), sizeof(Channels[j].PositionKeys[i].mValue));// pos key
 		        }
 
-		        nsize =static_cast<uint32_t>(Channels[j].mRotationKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].RotationKeys.size());
 		        file.write(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.write(reinterpret_cast<char*>(&Channels[j].mRotationKeys[i].mTime), sizeof(Channels[j].mRotationKeys[i].mTime));// rot key
-			        file.write(reinterpret_cast<char*>(&Channels[j].mRotationKeys[i].mValue), sizeof(Channels[j].mRotationKeys[i].mValue));// rot key
+			        file.write(reinterpret_cast<char*>(&Channels[j].RotationKeys[i].mTime), sizeof(Channels[j].mRotationKeys[i].mTime));// rot key
+			        file.write(reinterpret_cast<char*>(&Channels[j].RotationKeys[i].mValue), sizeof(Channels[j].mRotationKeys[i].mValue));// rot key
 		        }
 
-		        nsize =static_cast<uint32_t>(Channels[j].mScalingKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].ScalingKeys.size());
 		        file.write(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.write(reinterpret_cast<char*>(&Channels[j].mScalingKeys[i].mTime), sizeof(Channels[j].mScalingKeys[i].mTime));// rot key
-			        file.write(reinterpret_cast<char*>(&Channels[j].mScalingKeys[i].mValue), sizeof(Channels[j].mScalingKeys[i].mValue));// rot key
+			        file.write(reinterpret_cast<char*>(&Channels[j].ScalingKeys[i].mTime), sizeof(Channels[j].mScalingKeys[i].mTime));// rot key
+			        file.write(reinterpret_cast<char*>(&Channels[j].ScalingKeys[i].mValue), sizeof(Channels[j].mScalingKeys[i].mValue));// rot key
 		        }
 	        }
         }*/
@@ -236,28 +308,28 @@ namespace SmackBrosClient2.OpenGL
 		        temp[nsize]=0;// null char
 		        Channels[j].Name=temp;
 
-		        nsize =static_cast<uint32_t>(Channels[j].mPositionKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].PositionKeys.size());
 		        file.read(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
-		        Channels[j].mPositionKeys.resize(nsize);
+		        Channels[j].PositionKeys.resize(nsize);
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.read(reinterpret_cast<char*>(&Channels[j].mPositionKeys[i].mTime), sizeof(Channels[j].mPositionKeys[i].mTime));// pos key
-			        file.read(reinterpret_cast<char*>(&Channels[j].mPositionKeys[i].mValue), sizeof(Channels[j].mPositionKeys[i].mValue));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].PositionKeys[i].mTime), sizeof(Channels[j].PositionKeys[i].mTime));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].PositionKeys[i].mValue), sizeof(Channels[j].PositionKeys[i].mValue));// pos key
 		        }
 
-		        nsize =static_cast<uint32_t>(Channels[j].mRotationKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].RotationKeys.size());
 		        file.read(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
-		        Channels[j].mRotationKeys.resize(nsize);
+		        Channels[j].RotationKeys.resize(nsize);
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.read(reinterpret_cast<char*>(&Channels[j].mRotationKeys[i].mTime), sizeof(Channels[j].mRotationKeys[i].mTime));// pos key
-			        file.read(reinterpret_cast<char*>(&Channels[j].mRotationKeys[i].mValue), sizeof(Channels[j].mRotationKeys[i].mValue));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].RotationKeys[i].mTime), sizeof(Channels[j].mRotationKeys[i].mTime));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].RotationKeys[i].mValue), sizeof(Channels[j].mRotationKeys[i].mValue));// pos key
 		        }
 
-		        nsize =static_cast<uint32_t>(Channels[j].mScalingKeys.size());
+		        nsize =static_cast<uint32_t>(Channels[j].ScalingKeys.size());
 		        file.read(reinterpret_cast<char*>(&nsize), sizeof(uint32_t));// the number of position keys
-		        Channels[j].mScalingKeys.resize(nsize);
+		        Channels[j].ScalingKeys.resize(nsize);
 		        for(size_t i(0); i< nsize; i++){// for each channel
-			        file.read(reinterpret_cast<char*>(&Channels[j].mScalingKeys[i].mTime), sizeof(Channels[j].mScalingKeys[i].mTime));// pos key
-			        file.read(reinterpret_cast<char*>(&Channels[j].mScalingKeys[i].mValue), sizeof(Channels[j].mScalingKeys[i].mValue));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].ScalingKeys[i].mTime), sizeof(Channels[j].mScalingKeys[i].mTime));// pos key
+			        file.read(reinterpret_cast<char*>(&Channels[j].ScalingKeys[i].mValue), sizeof(Channels[j].mScalingKeys[i].mValue));// pos key
 		        }
 	        }
 	        mLastPositions.resize( Channels.size(), std::make_tuple( 0, 0, 0));
@@ -282,7 +354,7 @@ namespace SmackBrosClient2.OpenGL
     }
     public class SceneAnimator
     {
-        public List<cAnimEvaluator> Animations; // a std::vector that holds each animation 
+        public List<AnimEvaluator> Animations; // a std::vector that holds each animation 
 	    public int CurrentAnimIndex; //Current animation index
 
         //protected:		
@@ -298,12 +370,11 @@ namespace SmackBrosClient2.OpenGL
             Skeleton = null;
             CurrentAnimIndex = -1;
         }
-        void Init(Scene pScene)
+        public void Init(Scene pScene)
         {
             // this must be called to fill the SceneAnimator with valid data
             if(!pScene.HasAnimations) 
                 return;
-	        Release();
 
 	        Skeleton = CreateBoneTree(pScene.RootNode, null);
 	        ExtractAnimations(pScene);
@@ -365,15 +436,15 @@ namespace SmackBrosClient2.OpenGL
 	        }
 	        //OUTPUT_DEBUG_MSG("Finished loading animations with "<<Bones.size()<<" bones");
         }
-        void Save(StreamWriter file)
+        public void Save(StreamWriter file)
         {
 
         }
-        void Load(StreamReader file)
+        public void Load(StreamReader file)
         {
 
         }
-        bool HasSkeleton() 
+        public bool HasSkeleton() 
         {
             return Bones.Any();// lets the caller know if there is a skeleton present
         }
@@ -383,7 +454,7 @@ namespace SmackBrosClient2.OpenGL
             //OUTPUT_DEBUG_MSG("Extracting Animations . . ");
 	        for(int i = 0; i < pScene.AnimationCount; i++)
             {
-		        Animations.Add(new cAnimEvaluator(pScene.Animations[i])); // add the animations
+		        Animations.Add(new AnimEvaluator(pScene.Animations[i])); // add the animations
 	        }
 	        for(int i = 0; i < Animations.Count(); i++)
             {
@@ -393,7 +464,7 @@ namespace SmackBrosClient2.OpenGL
 	        CurrentAnimIndex=0;
 	        SetAnimation("Idle");
         }
-        bool SetAnimIndex(int pAnimIndex)
+        public bool SetAnimIndex(int pAnimIndex)
         {
             // this takes an index to set the current animation to
             if (pAnimIndex >= Animations.Count()) 
@@ -450,7 +521,7 @@ namespace SmackBrosClient2.OpenGL
             return Animations[CurrentAnimIndex].Name;  
         }
         //GetBoneIndex will return the index of the bone given its name. The index can be used to index directly into the vector returned from GetTransform
-        int GetBoneIndex(string bname)
+        public int GetBoneIndex(string bname)
         {
             foreach(KeyValuePair<string, int> kv in BonesToIndex)
             {
@@ -563,7 +634,11 @@ namespace SmackBrosClient2.OpenGL
 	        // continue for all child nodes and assign the created internal nodes as our children
 	        for(int a = 0; a < pNode.ChildCount; a++)
             {// recursivly call this function on all children
-		        internalNode.Children.Add(CreateBoneTree(pNode.Children[a], internalNode));
+                var child = CreateBoneTree(pNode.Children[a], internalNode);
+                if (child != null)
+                {
+                    internalNode.Children.Add(child);
+                }
 	        }
 	        return internalNode;
         }

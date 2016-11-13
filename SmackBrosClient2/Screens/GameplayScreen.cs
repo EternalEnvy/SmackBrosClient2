@@ -13,17 +13,24 @@ using System.Threading;
 using System.Threading.Tasks;
 using Assimp;
 using Assimp.Configs;
+using NeptuneRenderEngine.Engine;
+using NeptuneRenderEngine.Engine.Interface;
+using NeptuneRenderEngine.Engine.Interface.Buffers;
+using NeptuneRenderEngine.Engine.Interface.Drawing;
+using NeptuneRenderEngine.Engine.Interface.Shaders;
+using NeptuneRenderEngine.Engine.Utilities;
 using OpenTK;
 using OpenTK.Graphics;
 using SmackBrosClient2.Screens;
 using SmackBrosClient2.Networking;
-using SmackBrosClient2.DirectX
+using SmackBrosClient2.DirectX;
 using SmackBrosClient2.GameObjects;
 using SmackBrosClient2.OpenGL;
+using Mesh = Assimp.Mesh;
 
 namespace SmackBrosClient2.Screens
 {
-    public partial class GameplayScreen : Screen
+    public class GameplayScreen : Screen
     {
         public string ServerIP;
         private bool DebugMode = true;
@@ -45,7 +52,9 @@ namespace SmackBrosClient2.Screens
         static Queue<Packet> packetProcessQueue = new Queue<Packet>();
         static DateTime lastUpdateInputThread = DateTime.Now;
         static DateTime lastUpdateUpdateThread = DateTime.Now;
-        static const int BufferStateLength = 4;
+        const int BufferStateLength = 4;
+
+        private VertexArray vertexArray;
 
         //The current rotation.
         private float rotation = 0.0f;
@@ -68,6 +77,8 @@ namespace SmackBrosClient2.Screens
         List<Smacker> smackers = new List<Smacker>();
         private List<Inputs> inputlist = new List<Inputs>();
 
+        private NeptuneRenderEngine.Engine.Utilities.Mesh mesh;
+
         //Temporary; for fun
         public bool songStarted = false;
 
@@ -82,13 +93,19 @@ namespace SmackBrosClient2.Screens
         public void LoadContent()
         {
             songs.Add("Melee Menu", new SoundPlayer(@"C:\Users\Lee\Documents\GitHub\SmackBrosClient\SmackBrosClient\files\menu.wav"));
-            String fileName = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "duck.dae");
-            AssimpContext importer = new AssimpContext();
-            importer.SetConfig(new NormalSmoothingAngleConfig(66.0f));
-            m_model = importer.ImportFile(fileName, PostProcessPreset.TargetRealTimeMaximumQuality);
-            ComputeBoundingBox();
+            //String fileName = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "duck.dae");
+            //AssimpContext importer = new AssimpContext();
+            //importer.SetConfig(new NormalSmoothingAngleConfig(66.0f));
+            //m_model = importer.ImportFile(fileName, PostProcessPreset.TargetRealTimeMaximumQuality);
+            
+            mesh = MeshLoader.LoadMesh(System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + "duck.dae");
+            ShaderProgram program = new ShaderProgram("vertshaderTemp.vert", "fragShaderTemp.frag");
+            vertexArray = new VertexArray();
+            vertexArray.SetLayout(program, mesh.VertexBuffer, mesh.GetBindings("position", "normal", "texcoord"));
+
+            //ComputeBoundingBox();
         }
-        public override void Initialize()
+        public void Initialize()
         {
             if (!songStarted)
             {
@@ -101,57 +118,42 @@ namespace SmackBrosClient2.Screens
         }
         private void InitializeTexture()
         {
-            gImage1 = new Bitmap(@"C:\Users\Lee\Documents\GitHub\SmackBrosClient\SmackBrosClient\files\meleemenu1.jpg");
-            System.Drawing.Rectangle rect = new System.Drawing.Rectangle(0, 0, gImage1.Width, gImage1.Height);
-            gbitmapdata = gImage1.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-            gImage1.UnlockBits(gbitmapdata);
-            gl.GenTextures(1, gtexture);
-            gl.BindTexture(OpenGL.GL_TEXTURE_2D, gtexture[0]);
-            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, (int)OpenGL.GL_RGBA, gImage1.Width, gImage1.Height, 0, OpenGL.GL_BGR_EXT, OpenGL.GL_UNSIGNED_BYTE, gbitmapdata.Scan0);
-
-            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_MIN_FILTER, OpenGL.GL_LINEAR);
-
             TexturesInitialised = true;
         }
+
+        public override void Initialize(ref ScreenManager manager)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void Update()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void UpdateInput()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void UpdateMouse()
+        {
+            throw new NotImplementedException();
+        }
+
         public override void Draw()
         {
             if (!TexturesInitialised)
             {
                 InitializeTexture();
             }
-            //  Clear the color and depth buffer.
-            gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
-
-            //  Load the identity matrix.
-            gl.LoadIdentity();
-            gl.Enable(OpenGL.GL_TEXTURE_2D);
-            gl.Enable(OpenGL.GL_LIGHTING);
-            gl.Enable(OpenGL.GL_LIGHT0);
-            gl.Enable(OpenGL.GL_DEPTH_TEST);
-            gl.Enable(OpenGL.GL_NORMALIZE);
-            gl.BindTexture(OpenGL.GL_TEXTURE_2D, gtexture[0]);
-            gl.Color(1.0f, 1.0f, 1.0f, 0.1f);
-
-            gl.Begin(OpenGL.GL_QUADS);
-            gl.FrontFace(OpenGL.GL_FRONT_FACE);
-
-            gl.TexCoord(1.0f, 1.0f);
-            gl.Vertex(gImage1.Width, gImage1.Height, 1.0f);
-            gl.TexCoord(0.0f, 1.0f);
-            gl.Vertex(0.0f, gImage1.Height, 1.0f);
-            gl.TexCoord(0.0f, 0.0f);
-            gl.Vertex(0.0f, 0.0f, 1.0f);
-            gl.TexCoord(1.0f, 0.0f);
-            gl.Vertex(gImage1.Width, 0.0f, 1.0f);
-            gl.End();
             
-            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            BindingHelper<ArrayBuffer>.Push(mesh.VertexBuffer);
+            BindingHelper<VertexArray>.Push(vertexArray);
+            GL.DrawArrays(OpenTK.Graphics.OpenGL.BeginMode.Triangles, 0, mesh.Length);
+            BindingHelper<VertexArray>.Pop();
+            BindingHelper<ArrayBuffer>.Pop();
 
-            gl.MatrixMode(OpenGL.GL_PROJECTION);
-            gl.LoadIdentity();
-            gl.Ortho(0.0, (double)gImage1.Width, (double)gImage1.Height, 0.0, -1.0, 1.0);
-            gl.MatrixMode(OpenGL.GL_MODELVIEW);
-            gl.Disable(OpenGL.GL_DEPTH_TEST);
             
         } 
         private void ComputeBoundingBox()
@@ -165,88 +167,22 @@ namespace SmackBrosClient2.Screens
         }
         private void ComputeBoundingBox(Node node, ref Vector3 min, ref Vector3 max, ref Matrix4 trafo)
         {
-            gl.PushMatrix();
-            gl.LoadIdentity();
-            Matrix4 prev = trafo;
-            trafo = Matrix4.Mult(prev, FromMatrix(node.Transform));
-
-            if (node.HasMeshes)
-            {
-                foreach (int index in node.MeshIndices)
-                {
-                    Mesh mesh = m_model.Meshes[index];
-                    for (int i = 0; i < mesh.VertexCount; i++)
-                    {
-                        Vector3 tmp = FromVector(mesh.Vertices[i]);
-                        Vector3.Transform(tmp, trafo);
-
-                        min.X = Math.Min(min.X, tmp.X);
-                        min.Y = Math.Min(min.Y, tmp.Y);
-                        min.Z = Math.Min(min.Z, tmp.Z);
-
-                        max.X = Math.Max(max.X, tmp.X);
-                        max.Y = Math.Max(max.Y, tmp.Y);
-                        max.Z = Math.Max(max.Z, tmp.Z);
-                    }
-                }
-            }
-
-            for (int i = 0; i < node.ChildCount; i++)
-            {
-                ComputeBoundingBox(node.Children[i], ref min, ref max, ref trafo);
-            }
-            trafo = prev;
         }
         protected void OnUnload()
         {
-            gl.DeleteTextures(1, gtexture);
+
         }
         //Handles the Resized event of the openGLControl1 control 
         private void Resized(double Width, double Height)
         {
-            //  Set the projection matrix.
-            gl.MatrixMode(OpenGL.GL_PROJECTION);
 
-            //  Load the identity.
-            gl.LoadIdentity();
-
-            if (!TexturesInitialised)
-            {
-                gl.Ortho(-1, 1, -1, 1, -1, 1);
-            }
-            else
-            {
-                gl.Ortho(0, gImage1.Width, gImage1.Height, 0, -1, 1);
-            }
-            gl.MatrixMode(OpenGL.GL_MODELVIEW);
-            gl.Disable(OpenGL.GL_DEPTH_TEST);
-
-            //  Create a perspective transformation.
-            gl.Perspective(45.0f, (double)Width / (double)Height, 1.0, 1000.0);
-            gl.Viewport(0, 0, (int)Width, (int)Height);
-            //  Use the 'look at' helper function to position and aim the camera.
-            gl.LookAt(-5, 5, -5, 0, 0, 0, 0, 1, 0);
-
-            //  Set the modelview matrix.
-            gl.MatrixMode(OpenGL.GL_MODELVIEW);
         }
         private bool LoadModelAsset(string path)
         {
             path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), path);
-            /* we are taking one of the postprocessing presets to avoid
-            spelling out 20+ single postprocessing flags here. */
-            m_model = Importer.ImportFile(path, PostProcessPreset.TargetRealTimeMaximumQuality);
-            if (m_model != null)
-            {
-                Get_Bounding_Box(m_sceneMin, m_sceneMax);
-                m_sceneCenter.X = (m_sceneMin.X + m_sceneMin.X) / 2.0f;
-                m_sceneCenter.Y = (m_sceneMin.Y + m_sceneMin.Y) / 2.0f;
-                m_sceneCenter.Z = (m_sceneMin.Z + m_sceneMin.Z) / 2.0f;
-                return true;
-            }
-            return false;
+            return true;
         }
-        void Get_Bounding_Box(Vector3 min, Vector3 max, )
+        void Get_Bounding_Box(Vector3 min, Vector3 max)
         {
 
             Matrix4x4 trafo = Matrix4x4.Identity;
@@ -280,144 +216,8 @@ namespace SmackBrosClient2.Screens
             }
             trafo = prev;
         }
-        private void RecursiveRender(Assimp.Scene scene, Node node)
-        {
-            Matrix4 m = FromMatrix(node.Transform);
-            m.Transpose();
-            gl.PushMatrix();
-            gl.MultMatrix(FloatFromMatrix(m));
-
-            if (node.HasMeshes)
-            {
-                foreach (int index in node.MeshIndices)
-                {
-                    Mesh mesh = scene.Meshes[index];
-                    ApplyMaterial(m_model.Materials[mesh.MaterialIndex]);
-
-                    if (mesh.HasNormals)
-                    {
-
-                        gl.Enable(OpenGL.GL_LIGHTING);
-                    }
-                    else
-                    {
-                        gl.Disable(OpenGL.GL_LIGHTING);
-                    }
-
-                    bool hasColors = mesh.HasVertexColors(0);
-                    if (hasColors)
-                    {
-                        gl.Enable(OpenGL.GL_COLOR_MATERIAL);
-                    }
-                    else
-                    {
-                        gl.Disable(OpenGL.GL_COLOR_MATERIAL);
-                    }
-
-                    bool hasTexCoords = mesh.HasTextureCoords(0);
-
-                    foreach (Assimp.Face face in mesh.Faces)
-                    {
-                        BeginMode faceMode;
-                        switch (face.IndexCount)
-                        {
-                            case 1:
-                                faceMode = BeginMode.Points;
-                                break;
-                            case 2:
-                                faceMode = BeginMode.Lines;
-                                break;
-                            case 3:
-                                faceMode = BeginMode.Triangles;
-                                break;
-                            default:
-                                faceMode = BeginMode.Polygon;
-                                break;
-                        }
-
-                        gl.Begin(faceMode);
-                        for (int i = 0; i < face.IndexCount; i++)
-                        {
-                            int indice = face.Indices[i];
-                            if (hasColors)
-                            {
-                                Color4 vertColor = FromColor(mesh.VertexColorChannels[0][indice]);
-                                if (mesh.HasNormals)
-                                {
-                                    Vector3 normal = FromVector(mesh.Normals[indice]);
-                                    gl.Normal(normal.X, normal.Y, normal.Z);
-                                }
-                                if (hasTexCoords)
-                                {
-                                    Vector3 uvw = FromVector(mesh.TextureCoordinateChannels[0][indice]);
-                                    gl.TexCoord(uvw.X, 1 - uvw.Y);
-                                }
-                                Vector3 pos = FromVector(mesh.Vertices[indice]);
-                                gl.Vertex(pos.X, pos.Y, pos.Z);
-                            }
-                            gl.End();
-                        }
-                    }
-                }
-
-                for (int i = 0; i < node.ChildCount; i++)
-                {
-                    RecursiveRender(m_model, node.Children[i]);
-                }
-            }
-        }
-        private void ApplyMaterial(Material mat)
-        {
-            if (mat.GetMaterialTextureCount(TextureType.Diffuse) > 0)
-            {
-                TextureSlot tex = new TextureSlot();
-                mat.GetMaterialTexture(TextureType.Diffuse, 0, out tex);
-                LoadModelAsset(tex.FilePath);
-            }
-
-            Color4 color = new Color4(.8f, .8f, .8f, 1.0f);
-            if (mat.HasColorDiffuse)
-            {
-                // color = FromColor(mat.ColorDiffuse);
-            }
-            var colorf = new float[4];
-            color4_to_float4(color, colorf);
-            gl.Material(OpenGL.GL_FRONT_AND_BACK, OpenGL.GL_DIFFUSE, colorf);
-
-            color = new Color4(0, 0, 0, 1.0f);
-            if (mat.HasColorSpecular)
-            {
-                color = FromColor(mat.ColorSpecular);
-            }
-            gl.Material(OpenGL.GL_FRONT_AND_BACK, OpenGL.GL_SPECULAR, colorf);
-
-            color = new Color4(.2f, .2f, .2f, 1.0f);
-            if (mat.HasColorAmbient)
-            {
-                color = FromColor(mat.ColorAmbient);
-            }
-            gl.Material(OpenGL.GL_FRONT_AND_BACK, OpenGL.GL_AMBIENT, colorf);
-
-            color = new Color4(0, 0, 0, 1.0f);
-            if (mat.HasColorEmissive)
-            {
-                color = FromColor(mat.ColorEmissive);
-            }
-            gl.Material(OpenGL.GL_FRONT_AND_BACK, OpenGL.GL_EMISSION, colorf);
-
-            float shininess = 1;
-            float strength = 1;
-            if (mat.HasShininess)
-            {
-                shininess = mat.Shininess;
-            }
-            if (mat.HasShininessStrength)
-            {
-                strength = mat.ShininessStrength;
-            }
-
-            gl.Material(OpenGL.GL_FRONT_AND_BACK, OpenGL.GL_SHININESS, shininess * strength);
-        }
+        
+        
         void set_float4(float[] f, float a, float b, float c, float d)
         {
             f[0] = a;

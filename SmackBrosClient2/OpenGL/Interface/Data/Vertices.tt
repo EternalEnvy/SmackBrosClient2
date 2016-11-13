@@ -1,0 +1,196 @@
+﻿<#@ template debug="true" hostspecific="false" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="C:\Files\Dropbox\Coding\C#\OGLFV_Projects\Libraries\OpenTK.dll" #>
+<#@ assembly name="C:\Files\Dropbox\Coding\C#\neptune-render-engine\bin\Debug\NeptuneRenderEngine.dll" #>
+<#@ import namespace="NeptuneRenderEngine.Engine.Interface.Drawing" #>
+<#@ import namespace="OpenTK.Graphics.OpenGL" #>
+<#@ import namespace="NeptuneRenderEngine" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Reflection" #>
+using NeptuneRenderEngine.Engine.Interface.Buffers;
+using NeptuneRenderEngine.Engine.Interface.Drawing;
+#if OPENGL4
+using BUH = OpenTK.Graphics.OpenGL4.BufferUsageHint;
+using VAPT = OpenTK.Graphics.OpenGL4.VertexAttribPointerType;
+#else
+using BUH = OpenTK.Graphics.OpenGL.BufferUsageHint;
+using VAPT = OpenTK.Graphics.OpenGL.VertexAttribPointerType;
+#endif
+
+namespace NeptuneRenderEngine.Engine.Interface.Data
+{
+// ReSharper disable CheckNamespace
+// ReSharper disable InconsistentNaming
+<# 
+	var bindings = new []
+	{
+		new []
+		{
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords}
+		},											
+		new []										
+		{											
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords}
+		},													
+		new []										
+		{											
+			new Binding(){Length = 3, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Uv}
+		},														
+		new []										
+		{											
+			new Binding(){Length = 3, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 3, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords}
+		},											
+		new []										
+		{											
+			new Binding(){Length = 3, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 3, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Uv}
+		},
+		new []
+		{
+			new Binding(){Length = 3, FieldType = "uint", PointerType = VertexAttribPointerType.UnsignedInt, NameType = Binding.BindingNamingType.Indexed},
+			new Binding(){Length = 3, FieldType = "uint", PointerType = VertexAttribPointerType.UnsignedInt, NameType = Binding.BindingNamingType.Indexed},
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Indexed}
+		},
+		new []
+		{
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 2, FieldType = "uint", PointerType = VertexAttribPointerType.UnsignedInt, NameType = Binding.BindingNamingType.Coords}
+		},
+		new []
+		{
+			new Binding(){Length = 2, FieldType = "float", PointerType = VertexAttribPointerType.Float, NameType = Binding.BindingNamingType.Coords},
+			new Binding(){Length = 2, FieldType = "int", PointerType = VertexAttribPointerType.Int, NameType = Binding.BindingNamingType.Coords}
+		}
+	};
+
+	var colorNames = new[] {"r", "g", "b", "a"};
+	var coordNames = new[] {"x", "y", "z", "w"};
+	var uvNames = new[] {"u", "v"};
+	var valueNames = new[] { "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y" };
+
+	foreach (var bind in bindings)
+	{
+		var formatstr = bind.Select(item => item.Length + item.PointerType.ToString().Where(char.IsUpper).Select(c => c.ToString().ToLower()).Aggregate((c, c1) => c + c1)).Aggregate((s, s1) => s + s1);
+
+		int i = 0;
+		var shaderTypeNames = bind.Aggregate("", (current, bind2) => current + string.Format("string {0}{1}name, ", bind2.PointerType.ToString().ToLower(), i++));
+		shaderTypeNames = shaderTypeNames.Substring(0, shaderTypeNames.Length - 2);
+
+		i = 0;
+		var items = bind.Select(item => string.Format("\t\t\t\tnew VaoBinding{{ Length = {0}, PointerType = VAPT.{1}, ShaderName = {2} }}", 
+				item.Length, 
+				item.PointerType, item.PointerType.ToString().ToLower() + i++ + "name"));
+#>
+	public struct Vertex<#= formatstr #>
+	{
+<#
+		var dict = new Dictionary<Binding.BindingNamingType, int>();
+		var indexed = new Dictionary<Binding.BindingNamingType, int>();
+
+	    var constructorParams = new List<Tuple<string, string>>();
+		foreach(var item in bind)
+		{
+			if (!dict.ContainsKey(item.NameType)) dict.Add(item.NameType, 0);
+			for(int j = 0; j < item.Length; j++)
+			{			
+				var name = "";
+				switch (item.NameType)
+				{
+					case Binding.BindingNamingType.Color:
+						name = colorNames[j%colorNames.Length] + (dict[item.NameType]*colorNames.Length + j)/colorNames.Length;
+						break;
+					case Binding.BindingNamingType.Coords:
+						name = coordNames[j%coordNames.Length] + (dict[item.NameType]*coordNames.Length + j)/coordNames.Length;
+						break;
+					case Binding.BindingNamingType.Values:
+						name = valueNames[j%valueNames.Length] + (dict[item.NameType]*valueNames.Length + j)/valueNames.Length;
+						break;
+					case Binding.BindingNamingType.Uv:
+						name = uvNames[j%uvNames.Length] + (dict[item.NameType]*uvNames.Length + j)/uvNames.Length;
+						break;
+					case Binding.BindingNamingType.Indexed:
+						if (!indexed.ContainsKey(item.NameType)) indexed.Add(item.NameType, 0);
+						name = item.PointerType.ToString().Where(char.IsUpper).Select(c => c.ToString().ToLower()).Aggregate((c, c1) => c + c1) + indexed[item.NameType];
+						indexed[item.NameType] = indexed[item.NameType] + 1;
+						break;
+				}
+			    constructorParams.Add(new Tuple<string, string>(item.FieldType, name));
+#>
+		public <#= item.FieldType #> <#= name #>;
+<#			}
+			dict[item.NameType] = dict[item.NameType] + 1;
+		} 
+#>
+
+		public static readonly int Size = <#= bind.Sum(item => item.Size) #>;
+
+		public Vertex<#= formatstr #>(<#= constructorParams.Select(item => string.Format("{0} {1}", item.Item1, item.Item2)).Aggregate((s, s1) => string.Format("{0}, {1}", s, s1)) #>)
+	    {
+<#			foreach (var tuple in constructorParams) { #>
+			this.<#= tuple.Item2 #> = <#= tuple.Item2 #>;
+<# } #>		}
+	
+		public static VaoBinding[] GetBindings(<#= shaderTypeNames #>)
+		{
+			return new [] 
+			{ 
+<#= items.Aggregate((s, s1) => s + ",\n" + s1) #>
+			};
+		}
+	}		
+	 
+<#}#>
+	public static class BufferVertexExtension
+	{
+<# 
+var typenames = bindings.Select(bind => "Vertex" + bind.Select(item => item.Length + item.PointerType.ToString().Where(char.IsUpper).Select(c => c.ToString().ToLower()).Aggregate((c, c1) => c + c1)).Aggregate((s, s1) => s + s1)).ToArray();
+foreach (var t in Enum.GetValues(typeof (OpenTK.Graphics.OpenGL.BufferTarget))) {
+    foreach (var bind in typenames)
+    {
+#>
+		public static void BufferData(this <#= t #> buffer, <#= bind #>[] data, BUH hint = BUH.StaticDraw) { buffer.BufferData(<#= bind #>.Size, data, hint); }
+<# } #>
+
+<# }#>
+	}	
+// ReSharper restore CheckNamespace
+// ReSharper restore InconsistentNaming
+}
+
+<#+
+	struct Binding
+	{
+		public enum BindingNamingType
+		{
+			Uv = 16,
+			Color = 8,
+			Coords = 4,
+			Values = 2,
+			Indexed = 0
+		}
+		public int Length;
+		public VertexAttribPointerType PointerType;
+		public string FieldType;
+		public BindingNamingType NameType;
+
+		public int Size
+		{
+			get
+			{
+				return Length *
+					(PointerType == VertexAttribPointerType.Byte || PointerType == VertexAttribPointerType.UnsignedByte ? 1 :
+					(PointerType == VertexAttribPointerType.Short || PointerType == VertexAttribPointerType.UnsignedShort ? 2 :
+					(PointerType == VertexAttribPointerType.Int || PointerType == VertexAttribPointerType.UnsignedInt ? 4 :
+					(PointerType == VertexAttribPointerType.HalfFloat ? 2 :
+					(PointerType == VertexAttribPointerType.Float ? 4 :
+					(PointerType == VertexAttribPointerType.Double ? 8 : 0))))));
+			}
+		}
+	}
+#>

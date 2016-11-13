@@ -27,11 +27,10 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using SharpDX.Windows;
-using AssimpWrapper;
 using Buffer = SharpDX.Direct3D11.Buffer;
 using Device = SharpDX.Direct3D11.Device;
-using MapFlags = SharpDX.Direct3D11.MapFlags;
 using System.Windows;
+using SharpDX.Mathematics.Interop;
 using SmackBrosClient2.DirectX;
 
 namespace SmackBrosClient2
@@ -133,7 +132,16 @@ namespace SmackBrosClient2
 
             // Prepare some of the stages. The others are mesh dependent and will be set later       
             context.VertexShader.Set(vertexShader);
-            context.Rasterizer.SetViewports(new Viewport(0, 0, form.Width, form.Height, 0.0f, 1.0f));
+            var viewport = new Viewport(0, 0, form.ClientSize.Width, form.ClientSize.Height, 0.0f, 1.0f);
+            RawViewportF rawViewPort;
+            rawViewPort.X = viewport.X;
+            rawViewPort.Y = viewport.Y;
+            rawViewPort.Height = viewport.Height;
+            rawViewPort.Width = viewport.Width;
+            rawViewPort.MinDepth = viewport.MinDepth;
+            rawViewPort.MaxDepth = viewport.MaxDepth;
+            RawViewportF[] k = {rawViewPort};
+            context.Rasterizer.SetViewports(k);
             context.PixelShader.Set(pixelShader);
             context.PixelShader.SetSampler(0, sampler);
             context.OutputMerger.SetTargets(depthView, renderView);
@@ -145,7 +153,7 @@ namespace SmackBrosClient2
             PixelShaderData psData = new PixelShaderData();
 
             //set light position
-            psData.lightPos = new Vector4(0, 2.5f, 0, 0);
+            psData.lightPos = new SharpDX.Vector4(0, 2.5f, 0, 0);
 
             //update pixel shader constant buffer. Only need to do this once.
             context.UpdateSubresource(ref psData, pixelConstantBuffer);
@@ -163,15 +171,15 @@ namespace SmackBrosClient2
                 var time = clock.ElapsedMilliseconds / 1000.0f;
 
                 // Prepare matrices
-                Vector3 cameraPosition = new Vector3(0, 3, 5.0f);
-                Vector3 cameraLookAt = new Vector3(0, 2.0f, 0);
+                SharpDX.Vector3 cameraPosition = new SharpDX.Vector3(0, 3, 5.0f);
+                SharpDX.Vector3 cameraLookAt = new SharpDX.Vector3(0, 2.0f, 0);
 
                 //rotate camera
-                Vector4 tempPos = Vector3.Transform(cameraPosition, Matrix.RotationY(0.2f * time));
-                cameraPosition = new Vector3(tempPos.X, tempPos.Y, tempPos.Z);
+                Vector4 tempPos = SharpDX.Vector3.Transform(cameraPosition, Matrix.RotationY(0.2f * time));
+                cameraPosition = new SharpDX.Vector3(tempPos.X, tempPos.Y, tempPos.Z);
 
                 //calculate the view matrix 
-                var view = Matrix.LookAtLH(cameraPosition, cameraLookAt, Vector3.UnitY);
+                var view = Matrix.LookAtLH(cameraPosition, cameraLookAt, SharpDX.Vector3.UnitY);
                 var viewProj = Matrix.Multiply(view, proj);
 
                 // Clear views

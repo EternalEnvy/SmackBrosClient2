@@ -1,0 +1,278 @@
+﻿<#@ template debug="true" hostspecific="false" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="OpenTK" #>
+<#@ import namespace="OpenTK.Graphics.OpenGL" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Reflection" #>
+
+using System.Collections.Generic;
+
+namespace NeptuneRenderEngine.Engine
+{
+	// ReSharper disable InconsistentNaming
+	// ReSharper disable CSharpWarnings::CS0618
+	// ReSharper disable NotAccessedField.Local
+	// ReSharper disable RedundantCast
+	#pragma warning disable 618
+	public static class GLStates
+	{
+	<#
+	var checks = new StateCheck[]
+	{
+		new StateCheck(){MethodName = "BindBuffer", ParamName = "buffer", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (BufferTarget), "target")
+		}},
+		new StateCheck(){MethodName = "BindBufferBase", ParamName = "buffer", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (BufferTarget), "target"),
+			new KeyValuePair<Type, string>(typeof (uint), "index"),
+		}},
+		new StateCheck(){MethodName = "BindAttribLocation", ParamName = "index", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (uint), "program"),
+			new KeyValuePair<Type, string>(typeof (string), "name"),
+		}},
+		new StateCheck(){MethodName = "BindFragDataLocation", ParamName = "color", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (uint), "program"),
+			new KeyValuePair<Type, string>(typeof (string), "name"),
+		}},
+		new StateCheck(){MethodName = "BindFramebuffer", ParamName = "framebuffer", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (FramebufferTarget), "target")
+		}},
+		new StateCheck(){MethodName = "BindRenderbuffer", ParamName = "renderbuffer", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (RenderbufferTarget), "target")
+		}},
+		new StateCheck(){MethodName = "BindTexture", ParamName = "texture", RetType = typeof (uint),FilterParams = new[]
+		{
+			new KeyValuePair<Type, string>(typeof (TextureTarget), "target")
+		}},
+		new StateCheck(){MethodName = "BindVertexArray", ParamName = "array", RetType = typeof (uint)},
+		new StateCheck(){MethodName = "UseProgram", ParamName = "program", RetType = typeof (uint)},
+		new StateCheck(){MethodName = "ActiveTexture", ParamName = "texture", RetType = typeof (TextureUnit)},
+		new StateCheck(){MethodName = "Begin", ParamName = "mode", RetType = typeof (BeginMode)}
+	};
+
+	foreach (var check in checks)
+	{
+		var retType = check.RetType.FullName;
+		var safeMethodName = check.MethodName;
+
+
+		if(check.FilterParams != null && check.FilterParams.Length > 0)
+		{
+		var paramFiltering = check.FilterParams.Select(item => item.Key + " " + item.Value);
+		#>
+
+		private struct FilterStruct<#= safeMethodName.ToUpper() #> 
+		{<#= paramFiltering.Aggregate( "", (s, s1) => s + "\n\t\t\tpublic " + s1 + ";") #>
+		}
+		private readonly static Dictionary<FilterStruct<#= safeMethodName.ToUpper() #>, <#= retType #>> _<#= safeMethodName #>_dict = new Dictionary<FilterStruct<#= safeMethodName.ToUpper() #>, <#= retType #>>();
+		internal static void SetState_<#= safeMethodName #>(<#= paramFiltering.Aggregate((s, s1) => s + ", " + s1) #>, object val)
+		{
+			var filterStruct = new FilterStruct<#= safeMethodName.ToUpper() #> { <#= check.FilterParams.Select(item => item.Value + " = " + item.Value).Aggregate((s, s1) => s + ", " + s1) #>};
+			if(_<#= safeMethodName #>_dict.ContainsKey(filterStruct))
+				_<#= safeMethodName #>_dict[filterStruct] = (<#= retType #>)System.Convert.ChangeType(val, typeof(<#= retType #>));
+			else
+				_<#= safeMethodName #>_dict.Add(filterStruct, (<#= retType #>)System.Convert.ChangeType(val, typeof(<#= retType #>)));
+		}	
+		public static <#= retType #> GetState_<#= safeMethodName #>(<#= paramFiltering.Aggregate((s, s1) => s + ", " + s1) #>)
+		{
+			<#= retType #> val;
+			return (_<#= safeMethodName #>_dict.TryGetValue(new FilterStruct<#= safeMethodName.ToUpper() #> { <#= check.FilterParams.Select(item => item.Value + " = " + item.Value).Aggregate((s, s1) => s + ", " + s1) #>}, out val) ? val : default(<#= retType #>));
+		}
+		<#
+		}
+		else
+		{
+			#>
+		
+		private static <#= retType #> _val_<#= safeMethodName #>;
+		internal static void SetState_<#= safeMethodName #>(object val)
+		{
+			_val_<#= safeMethodName #> = (<#= retType #>)System.Convert.ChangeType(val, typeof(<#= retType #>));
+		}	
+		public static <#= retType #> GetState_<#= safeMethodName #>()
+		{
+			return _val_<#= safeMethodName #>;
+		}
+			<#
+		}
+	}#>
+	
+	}
+
+	public static class NGL
+	{
+	<#
+	foreach (
+	   var method in
+		   typeof(OpenTK.Graphics.OpenGL.GL).GetMethods(BindingFlags.Static | BindingFlags.Public)
+			   .ToArray())
+	{
+		var assignExpr = "";
+		var match = checks.Where(item => item.MethodName == method.Name).ToArray();
+		if (match.Any())
+		{
+			var first = match.First();
+			assignExpr = String.Format("GLStates.SetState_{0}({1}{2});", method.Name, first.FilterParams != null && first.FilterParams.Length > 0 ? first.FilterParams.Select(item => "(" + item.Key.FullName + ")" + item.Value).Aggregate((s, s1) => s + ", " + s1) + ", " : "", first.ParamName);
+		}
+		MethodInfo method1 = method;
+		var parameters = method.GetParameters().Select(item => new Parameter()
+		{
+			Method = method1,
+			ParameterInfo = item
+		}).ToArray();
+	
+	
+		if (method.GetParameters().Any(item => item.ParameterType.IsPointer))
+			continue;
+	
+		var retParam = method.ReturnParameter; var retIsVoid = retParam == null || retParam.ParameterType == typeof(void);
+		var metParam = method.GetParameters();
+	
+		var assign = "";
+		var ret = "";
+		if (!retIsVoid) { assign = "var retValOut = "; ret = "return retValOut;"; }
+	
+		var retType = retIsVoid ? "void" : string.IsNullOrEmpty(retParam.ParameterType.FullName) ? retParam.ParameterType.Name : retParam.ParameterType.FullName;
+		var funcName = method.Name;
+		var className = method.DeclaringType.FullName;
+	
+		var signature = method.ToString() + (metParam.Length > 0 ? metParam.Select(item => "\n\t\t//" + item.ParameterType.Name + " " + item.Name + "(Out: " + item.IsOut + ", In: " + item.IsIn + ")").Aggregate((s1, s2) => s1 + s2) : "");
+	
+		var genericParams = method.ContainsGenericParameters ? "<" + method.GetGenericArguments().Select(item => item.Name).Aggregate((t1, t2) => t1.ToString() + ", " + t2.ToString()) + ">" : "";
+		var genericConstraint= method.ContainsGenericParameters ? method.GetGenericArguments().Select(item => "where " +  item.Name + " : struct").Aggregate((t1, t2) => t1.ToString() + " " + t2.ToString()): "";
+		
+		var metParamStr = parameters.Count() > 0 ? parameters.Select(item => item.GetSignatureString()).Aggregate((s, s1) => s + ", " + s1) : "";
+		var passParamStr = parameters.Count() > 0 ? parameters.Select(item => item.GetCallString()).Aggregate((s, s1) => s + ", " + s1) : "";
+	     
+		 var safestr = "";
+	 foreach (var par in method.GetParameters())
+	 {
+	     if (par.ParameterType.IsPointer) safestr = "unsafe ";
+#>		// <#= par.ParameterType.Name #> <#= par.Name #> Out: <#= par.IsOut #>, In: <#= par.IsIn #> <#= par.IsRetval #> <#= par.ParameterType.IsPointer #>
+<#}#>
+		
+		public static <#=safestr#><#= retType #> <#= funcName #><#= genericParams #> (<#= metParamStr #>) <#= genericConstraint #>
+		{ 
+			<#= assignExpr + "\n\t\t\t" #>#if DEBUG
+			var catcher = OpenTK.Graphics.OpenGL.GL.GetError(); if(catcher != OpenTK.Graphics.OpenGL.ErrorCode.NoError) System.Console.WriteLine(catcher);
+			<#= assign #><#= className #>.<#= funcName #>(<#= passParamStr #>);
+			var error = OpenTK.Graphics.OpenGL.GL.GetError(); 
+			if(error != OpenTK.Graphics.OpenGL.ErrorCode.NoError) throw new GLException("You have an error (" + error + ")"); <#= ret #>
+			#else
+			<#= assign #><#= className #>.<#= funcName #>(<#= passParamStr #>);
+			<#= ret #>
+			#endif
+		}
+	<# } #>
+}
+	// ReSharper restore InconsistentNaming
+	// ReSharper restore CSharpWarnings::CS0618
+	// ReSharper restore NotAccessedField.Local
+	// ReSharper restore RedundantCast
+	#pragma warning restore 618
+}
+	<#+
+	public struct Parameter
+	{
+		public static string[] blackList = new[] {"params", "string", "ref", "base"};
+
+		enum ParamType
+		{
+			ByRef,
+			ByOut,
+			ByParams,
+			ByOptional,
+			ByStandard
+		}
+
+		enum ParamMode
+		{
+			TrimOne,
+			None
+		}
+
+		public MethodInfo Method;
+		public ParameterInfo ParameterInfo;
+		public Type ParameterType;
+		public string ParameterName { get { return blackList.Contains(ParameterInfo.Name) ? "@" + ParameterInfo.Name : ParameterInfo.Name; }}
+		public string ParameterTypeName { get { return string.IsNullOrEmpty(ParameterInfo.ParameterType.FullName) ? ParameterInfo.ParameterType.Name : ParameterInfo.ParameterType.FullName; }}
+
+		private Tuple<string, string> GetParamStrings()
+		{
+			var type = ParamType.ByStandard;
+			var mode = ParamMode.None;
+
+			bool isRef = (ParameterTypeName[ParameterTypeName.Length - 1] == '&');
+			if (ParameterInfo.IsOut && !ParameterInfo.IsIn)
+			{
+				if (isRef)
+				{
+					type = ParamType.ByOut;
+					mode = ParamMode.TrimOne;
+				}
+			}
+			else if (!ParameterInfo.IsOut && ParameterInfo.IsIn)
+			{
+				
+			}
+			else if (ParameterInfo.IsOut && ParameterInfo.IsIn)
+			{
+				
+				if (isRef)
+				{
+					type = ParamType.ByRef;
+					mode = ParamMode.TrimOne;
+				}
+			}
+			else
+			{
+				if (isRef)
+				{
+					type = ParamType.ByRef;
+					mode = ParamMode.TrimOne;
+				}
+			}
+			var paramTypeName = ParameterTypeName;
+			switch (mode)
+			{
+				case ParamMode.TrimOne:
+				paramTypeName = paramTypeName.Substring(0, paramTypeName.Length - 1);
+					break;
+			}
+			switch (type)
+			{
+				case ParamType.ByRef:
+					return new Tuple<string, string>(string.Format("ref {0} {1}", paramTypeName, ParameterName), string.Format("ref {0}", ParameterName));
+				case ParamType.ByOut:
+					return new Tuple<string, string>(string.Format("out {0} {1}", paramTypeName, ParameterName), string.Format("out {0}", ParameterName));
+			}
+			return new Tuple<string, string>(string.Format("{0} {1}", paramTypeName, ParameterName), string.Format("{0}", ParameterName));
+		}
+
+		public string GetSignatureString()
+		{
+			return GetParamStrings().Item1;
+		}
+
+		public string GetCallString()
+		{
+			return GetParamStrings().Item2;
+		}
+	}
+
+	public struct StateCheck
+	{
+		public string MethodName;
+		public string ParamName;
+		public Type RetType;
+		public KeyValuePair<Type, string>[] FilterParams;
+	}
+	#>
